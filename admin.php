@@ -6,7 +6,7 @@
  * this automatically
  * 
  * @license    GPL2
- * @author     Gero Gothe <practical@medizin-lernen.de>
+ * @author     Gero Gothe <gero.gothe@medizindoku.de>
  * 
  */
  
@@ -27,7 +27,7 @@ class admin_plugin_clearns extends DokuWiki_Admin_Plugin {
         
         # Erase pages of a namespace
         if (isset($_REQUEST['ERASE:DATA']) && $_REQUEST['confirm'] == 'Confirm') {
-            $this->rrmdir($_REQUEST['ERASE:DATA']);        
+            $this->rrmdir($_REQUEST['ERASE:DATA'],$_REQUEST['excludes']);     
         }
         
         # Erase medias of a namespace
@@ -56,6 +56,7 @@ class admin_plugin_clearns extends DokuWiki_Admin_Plugin {
         echo '<input type="hidden" name="do"   value="admin" />';
         echo '<input type="hidden" name="page" value="'.$this->getPluginName().'" />';
         
+        echo 'Do not erase following pages: <input type="text" name="excludes"> (comma-separated, each surrounded by <code>\'</code>, e.g. <code>\'start\',\'sidebar\'</code><br><br>';    
         echo 'Namespace: <input type="text" name="dir">';        
         echo ' <input type="submit" name="order" value="Execute"> <input type="submit" name="order" value="Cron">';
         
@@ -74,6 +75,8 @@ class admin_plugin_clearns extends DokuWiki_Admin_Plugin {
                 echo "<input type='hidden' name='ERASE:MEDIA' value='$dir_m'>";
             } else {$valid2 = false;}
             
+            echo '<input type="hidden" name="excludes"   value="'.($_REQUEST['excludes']).'" />';
+            
             echo "Check Directories: <br><br><code>$dir_f</code> ...<b>".($valid1? "found":"NOT FOUND")."</b>";
             echo "<br><code>$dir_m</code> ...<b>".($valid2? "found":"NOT FOUND")."</b>";
             
@@ -84,7 +87,7 @@ class admin_plugin_clearns extends DokuWiki_Admin_Plugin {
         
         # Create file for cronjob
         if ($_REQUEST['dir']!="" && $_REQUEST['order'] == "Cron") {
-            $this->createCron($_REQUEST['dir']);
+            $this->createCron($_REQUEST['dir'],$_REQUEST['excludes']);
         }
         
         # Section showing cronfile details
@@ -112,14 +115,17 @@ class admin_plugin_clearns extends DokuWiki_Admin_Plugin {
      * 
      * Modified version, original source: https://www.php.net/manual/en/function.rmdir.php#98622
      */
-    function rrmdir($dir) {
+    function rrmdir($dir,$excludes='') {
         $dir = "$dir/";
+        
+        $excludes = explode(',',$excludes);
+        foreach ($excludes as &$e) $e.= '.txt';
 
         if (is_dir($dir)) {
             $objects = scandir($dir);
             
             foreach ($objects as $object) {
-                if ($object != "." && $object != "..") {
+                if ($object != "." && $object != ".." && !in_array($object,$excludes)) {
                     if (filetype($dir."/".$object) == "dir") 
                         $this->rrmdir($dir."/".$object); 
                     else unlink   ($dir."/".$object);
@@ -137,7 +143,7 @@ class admin_plugin_clearns extends DokuWiki_Admin_Plugin {
      * 
      * @param $dir = the namespace
      */
-    function createCron($dir){
+    function createCron($dir,$excludes=''){
         global $conf;
         $base = DOKU_INC.'/lib/plugins/clearns/';
         $content = file_get_contents($base.'cron_tpl.php');
@@ -145,6 +151,7 @@ class admin_plugin_clearns extends DokuWiki_Admin_Plugin {
         $dirf = $conf['datadir'].'/'.$dir; # pages directory
         $dirm = $conf['mediadir'].'/'.$dir; # media directory
         
+        $content = str_replace('%EXCLUDES%',$excludes,$content);
         $content = str_replace('%DIRF%',$dirf,$content);
         $content = str_replace('%DIRM%',$dirm,$content);
         $content = str_replace('exit;',"",$content);
